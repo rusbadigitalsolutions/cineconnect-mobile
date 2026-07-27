@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "CineConnect Mobile",
+    "slug": "cineconnect-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/AppIcon.icon/Assets/icon.png",
+    "scheme": "cineconnect",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/AppIcon.icon/Assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0F172A"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cineconnect.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-foreground.png",
+        "backgroundColor": "#0F172A"
+      },
+      "package": "com.cineconnect.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/AppIcon.icon/Assets/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app needs access to your photos to upload media to your CineConnect portfolio and posts.",
+          "cameraPermission": "The app needs access to your camera to record monologues and take profile pictures."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/AppIcon.icon/Assets/icon.png",
+          "color": "#F59E0B"
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "73e4b468-2768-4164-b058-3803f14849f2"
+      }
+    },
+    "owner": "rusdigits-team"
+  }
+}

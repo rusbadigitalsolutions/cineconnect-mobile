@@ -1,0 +1,190 @@
+# PRODUCT SPECIFICATION & GENERATOR PROMPT: CINECONNECT MOBILE
+Target Platform: iOS & Android (Cross-Platform) using React Native, Expo, and NativeWind (Tailwind CSS).
+Backend Compatibility: Full real-time integration with existing Firebase Firestore and Auth configurations.
+
+---
+
+## 1. PROJECT OVERVIEW & ARCHITECTURE
+
+CineConnect is a high-performance, real-time social networking, job matching, talent contest, marketplace, and training portal for the film industry (Actors, Crew Members, Casting Directors, and Producers). 
+
+This prompt specifies the complete native mobile version of CineConnect. The mobile client must be built using React Native with Expo (Expo SDK 50+), Expo Router (or React Navigation v6), and NativeWind (Tailwind CSS v4-compatible). It must share the exact Firebase schemas, auth database, and real-time synchronizations as the CineConnect web app.
+
+### Core Technology Stack:
+- **Framework**: React Native with Expo (Managed Workflow)
+- **Styling**: NativeWind (Tailwind CSS utility styling adapted for Native React components)
+- **Navigation**: Expo Router (File-based navigation) or React Navigation Bottom Tabs + Stacks
+- **Database/Auth SDK**: Firebase JS SDK v9+ or `@react-native-firebase` (native libraries)
+- **Special Libraries**:
+  - `expo-image-picker` (Media picking & direct uploading)
+  - `expo-notifications` (Registering tokens, scheduling, and displaying push notifications)
+  - `react-native-webview` (Secure web-view wrapper for Paystack transactions & video reel previews)
+  - `lucide-react-native` (Consistent vector iconography)
+
+---
+
+## 2. REAL FIREBASE INTEGRATION & SETUP
+
+The mobile app must connect directly to the existing CineConnect Firebase ecosystem. Initialize Firebase using the configuration below:
+
+```typescript
+// firebase.ts - Mobile Firebase Configuration
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+import { initializeFirestore } from "firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const firebaseConfig = {
+  projectId: "gen-lang-client-0205908021",
+  appId: "1:611492344945:web:8e3ec6634c3ad4dba017d0",
+  apiKey: "AIzaSyADewfPQKlp24LLFmG77xJber5ce9mFmgw",
+  authDomain: "gen-lang-client-0205908021.firebaseapp.com",
+  firestoreDatabaseId: "ai-studio-1779f9cb-fcda-4b92-a5dc-866c4c1be75c",
+  storageBucket: "gen-lang-client-0205908021.firebasestorage.app",
+  messagingSenderId: "611492344945",
+  measurementId: ""
+};
+
+// Initialize Firebase App
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+
+// Initialize Firebase Auth with React Native persistence (AsyncStorage)
+const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(AsyncStorage)
+});
+
+// Initialize Firestore
+const db = initializeFirestore(app, {
+  databaseId: "ai-studio-1779f9cb-fcda-4b92-a5dc-866c4c1be75c",
+  experimentalAutoDetectLongPolling: true // Crucial for reliable mobile networks
+});
+
+export { app, auth, db };
+
+3. APP NAVIGATION STRUCTURE (BOTTOM TABS + NESTED STACKS)
+Organize the mobile user journey with an intuitive bottom navigation tab layout, framed by native SafeAreas, with immediate transition animations.
+Root Switcher: Checks Auth state (onAuthStateChanged). If not logged in, route to AuthStack (Sign In / Sign Up).
+Tab 1: Gist Feed (Home/Primary) — Nest Stacks for Post Details & Comments, and Create Post/Gist.
+Tab 2: Casting & Crew Calls (Jobs) — Nest Stacks for Job Detail, Application Form, and Matchmaker Tool.
+Tab 3: Talent Contests & Challenges — Nest Stacks for Contest Details, Leaderboard, and Submit Monologue Entry.
+Tab 4: Marketplace & Rentals — Nest Stacks for Item Details, Category Filter, and List Item as Vendor.
+Tab 5: Trainings & Seminars — Nest Stacks for Program Details, Subscription Management.
+Tab 6: Messaging Hub — Nest Stacks for Active Chats, Direct Messaging Screen.
+Tab 7: User Profile (Portfolio) — Nest Stacks for Edit Portfolio, Portfolio Preview, Premium Upgrade Upgrade Screen, and Admin Dashboard.
+4. DETAILED SCREEN DESIGN & DATA CORRELATIONS
+1. Authentication, Role Selection & Shared Settings
+Features: Traditional Email/Password registration and login.
+Role Selection Onboarding: Multi-step screens where new users must declare their professional industry role: Actor/Actress, Crew member, Casting Director, or Producer.
+Firestore Integration: Writes/reads profiles from /users/{uid} matching the Profile interface:
+Required Fields: name, email, role, location, timezone, skills[], avatar, verified: false, premium: false.
+2. Gist Feed Screen (First Screen After Authentication)
+Layout: Native scroll feed styled in Light/Dark mode containing post cards.
+Top Bar: Fast filtering toggles ("Trending", "All Gists", "Casting Updates"). Includes an input box linking to the Create Gist modal/screen.
+Social Features:
+Render rich media cards. Suppport images/video playing in line or opening in a modular player.
+Social interactions: Likes (write userId to /posts/{id}/likes array), custom Emoji Reactions (/posts/{id}/reactions), and comments count.
+Repost / Share feature: Supports quoting or reposting existing Gists with a repostComment, displaying the original author's thumbnail, name, role, and original post content.
+Text placeholder matches the web's: "Share casting updates, film gist, monologues or dynamic showreels...".
+Admin Flagging: Allow users to report/flag explicit content. This integrates directly with /posts/{id} by updating a moderationStatus field.
+3. Casting Calls, Job Board & Smart Matchmaker Screen
+Job Feed: Real-time listing of jobs from /jobs collection matching the Job interface.
+Casting Filters: Instant filter by roleType ("Actor/Actress" vs. "Crew member"), required skills, budget range, currency, and location.
+Application Flow: "Apply Now" button opening a bottom drawer. Users can attach a profile resume, record/add a video monologue link, or select a pre-saved showreel link, which writes to /jobs/{jobId}/applications/{userId}.
+Smart Matchmaker Sub-module:
+Automatically compares user's skills and role from /users/{uid} against active casting calls.
+Renders a horizontal card layout showing top job matches with matching score percentages (e.g., "94% Match").
+4. Contests & Challenges Screen
+Active Challenges View: Fetches documents from /contests collection (e.g. hashtags like #ActionMonologue, rules, prizes, and timelines).
+Submissions Feed: Lists contest entries from /contestSubmissions. Each entry includes:
+Video or audio monologue files (hosted on Firebase Storage).
+Entry metrics showing votes, user information, and hashtags.
+Voting Logic: Tactile voting button. Restricts voting abuse by adding the voter's userId to /contestSubmissions/{submissionId}/votes array in real time.
+5. Marketplace & Equipment/Location Rentals Screen
+Marketplace Grid: Bento grid layout displaying film equipment, shooting locations, costumes, transport services, andprops from /marketplaceItems collection.
+Rental Filter Toggles: Filter by Categories ("Equipment", "Location", "Props", "Costumes", "Services"), price range, period ("hour", "day", "week"), and location.
+Vendor Portal Integration: If a user has isVendor: true or wants to activate vendor mode, render an additional "Manage My Store" dashboard where they can capture item photos, pricing, availability statuses (available, rented, unavailable), and save changes back to the marketplace collection.
+6. Trainings, Workshops & Seminars Screen
+Feed: Fetches items from /trainingProgrammes. Supports filters for type: "programme", "seminar", or "workshop".
+Subscription Engine: A "Join Announcement List" toggle. This synchronizes with the sub-collection /trainingProgrammes/{programmeId}/subscriptions/{userId} to log user preferences and notify them about scheduling updates.
+Contact Shortcuts: Quick dial/email buttons that directly call Linking.openURL('tel:...') and Linking.openURL('mailto:...') using the program's contact metadata.
+7. Interactive Messaging & Chat System
+Active Conversation Threads: Real-time feed of active conversations from /chats or queried from /messages where the user's uid matches senderId or receiverId.
+Chat Window: Streamlined instant messaging list with auto-scroll-to-bottom. Displays user badges (Casting Director, Premium, etc.) dynamically next to usernames.
+Webcam Schedule Integration: Schedule interviews directly. The interface displays timezone differences dynamically ("Active Time-Zone Offsets") and includes clickable webcam links.
+8. User Profile & Premium Upgrades (Paystack Integration)
+Portfolio Section: Custom profile headers displaying badges, profile stats (Followers, Following counts), acting resume, headshots, full-body shots, and video/audio reels.
+Paystack Web-view Upgrades:
+Premium membership button opens an immersive payment screen.
+Implements a React Native WebView loading the secure Paystack checkout form initialized with the public keys fetched from /settings/paystackConfig.
+On successful callback validation, updates the user's profile database: premium: true and verificationStatus: "verified".
+9. Admin Control Panel Screen
+Access Rule: Only renders if /users/{uid}/isAdmin === true.
+System Settings Configuration:
+Edit variables in /settings/general: emergency lockdowns, smart matchmaker states, and ad configurations.
+Email SMTP SMTP (Brevo) Configuration: Setup host, port, user credentials, sender emails, and SMTP statuses.
+Moderation Panel: View reported posts, delete offensive posts, or suspend accounts.
+5. NATIVE MOBILE PERFORMANCE & CAPABILITIES
+A. Expo Push Notifications Setup
+The mobile app must register and manage push notifications using the pattern below:
+
+import * as Notifications from 'expo-notifications';
+import * as Device from 'expo-device';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from './firebase';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+export async function registerForPushNotificationsAsync(userId: string) {
+  let token;
+  if (Device.isDevice) {
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== 'granted') {
+      console.warn('Failed to get push token for push notifications!');
+      return;
+    }
+    token = (await Notifications.getExpoPushTokenAsync()).data;
+    
+    // Save token to User Profile in Firestore
+    const userDocRef = doc(db, 'users', userId);
+    await updateDoc(userDocRef, { pushToken: token });
+  } else {
+    console.log('Must use physical device for Push Notifications');
+  }
+  return token;
+}
+
+
+B. Image & Video Picker with Firebase Storage
+Use expo-image-picker to select profile photos, monologues, or marketplace item images.
+Convert assets to raw Blobs or base64 structures to upload securely to Firebase Storage buckets under matching directories (/avatars, /contests, /marketplace).
+C. Offline Support & Local Cache
+Configure Offline persistence:
+
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+// Enabled persistent local cache automatically for offline viewing of Gist feeds and job listings.
+
+
+6. STYLING, ACCESSIBILITY, AND THEME PAIRING
+Default Mode: Default styling is Light Mode across all screens (soft neutral-50/100, warm white surfaces, and charcoal text offsets). Ensure consistent, high-contrast readability.
+Dark Mode Compatibility: Support high-contrast dark theme variables (bg-zinc-950 backgrounds, #0F1117 surfaces, and slate text offsets).
+Tactile Feedback: Use Vibration.vibrate(10) or Haptics.impactAsync() from expo-haptics on major interactions (Liking, Submitting application, Casting vote, Registering).
+
+***
+
+## Summary of Accomplishments & Work Done
+
+1. **Configured Firebase Parameters**: Loaded and extracted the exact, real-time Firebase connection credentials (`projectId`, `apiKey`, `firestoreDatabaseId`, etc.) directly from your workspace config `/firebase-applet-config.json` to embed them into your mobile blueprint.
+2. **Re-engineered Feature Matrix**: Analyzed structural fields and layouts to include specifications for **Gist Feed (Posts)**, **Contests & Monologue voting**, **Marketplace rental portfolios**, **Trainings announcements subscription**, **Matchmaker logic**, **Messaging Hub**, **Paystack WebViews**, and **Admin panels**.
+3. **Drafted Push Notification & Storage Solutions**: Included standard native hooks (`expo-notifications` and `expo-image-picker` templates) detailing how the client will write tokens and upload media assets back to your active Firestore collections. 
+4. **Maintained Aesthetic Rules**: Ensured Light Mode is explicitly declared as the primary theme setting, matching the exact requirements you previously set up.
