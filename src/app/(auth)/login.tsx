@@ -4,13 +4,12 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { auth } from '../../lib/firebase';
+import Constants from 'expo-constants';
 import { useAuth } from '../../context/AuthContext';
 
 function LoginScreen() {
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, signInWithGoogleCredential } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,27 +45,45 @@ function LoginScreen() {
     try {
       setLoading(true);
       setError('');
-      if (!auth) {
-        throw new Error("Firebase Auth is not connected. Please try signing in with Email.");
+      
+      const googleClientIds = Constants?.expoConfig?.extra?.googleClientId || {};
+      const clientId = Platform.OS === 'ios'
+        ? googleClientIds.ios
+        : Platform.OS === 'android'
+        ? googleClientIds.android
+        : googleClientIds.web;
+
+      if (!clientId || clientId.startsWith('YOUR_')) {
+        throw new Error(`Google Client ID for ${Platform.OS} is not configured yet in app.json.`);
       }
-      if (Platform.OS === 'web') {
-        const provider = new GoogleAuthProvider();
-        await signInWithPopup(auth, provider);
-        router.replace('/(tabs)/gist');
-      } else {
-        const redirectUri = Linking.createURL('/');
-        const authUrl = `https://gen-lang-client-0205908021.firebaseapp.com/__/auth/handler?providerId=google.com&redirect_uri=${encodeURIComponent(redirectUri)}`;
-        const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
-        if (result.type === 'success' && result.url) {
-          router.replace('/(tabs)/gist');
+
+      const redirectUri = Linking.createURL('/');
+      const nonce = Math.random().toString(36).substring(2);
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=id_token` +
+        `&scope=${encodeURIComponent('openid profile email')}` +
+        `&nonce=${nonce}`;
+
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
+      if (result.type === 'success' && result.url) {
+        const urlStr = result.url.replace('#', '?');
+        const queryIndex = urlStr.indexOf('?');
+        if (queryIndex !== -1) {
+          const queryString = urlStr.substring(queryIndex + 1);
+          const params = new URLSearchParams(queryString);
+          const idToken = params.get('id_token');
+          if (idToken) {
+            await signInWithGoogleCredential(idToken);
+            router.replace('/(tabs)/gist');
+            return;
+          }
         }
       }
     } catch (err: any) {
-      console.warn('Google Auth error:', err);
-      const msg = err.code === 'auth/popup-closed-by-user'
-        ? 'Sign in was cancelled.'
-        : err.message || 'Google sign in failed.';
-      setError(msg);
+      console.warn('Direct Google Auth error:', err);
+      setError(err.message || 'Google sign in failed');
     } finally {
       setLoading(false);
     }
