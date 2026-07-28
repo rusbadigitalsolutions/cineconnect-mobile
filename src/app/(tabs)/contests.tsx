@@ -23,13 +23,39 @@ export default function ContestsScreen() {
       if (db) {
         const cRef = collection(db, 'contests');
         unsubs.push(onSnapshot(cRef, (snap) => {
-          const fetched: Contest[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Contest));
+          const fetched: Contest[] = snap.docs.map(docSnap => {
+            const d = docSnap.data();
+            return {
+              id: docSnap.id,
+              title: d.title || d.name || 'Monologue Challenge',
+              description: d.description || d.details || '',
+              hashtag: d.hashtag || '#CineConnect',
+              rules: Array.isArray(d.rules) ? d.rules : [],
+              prizePool: d.prizePool || d.prize || '₦500,000',
+              bannerUrl: d.bannerUrl || d.imageUrl || d.image || undefined,
+              deadline: d.deadline?.toDate ? d.deadline.toDate().toLocaleDateString() : (typeof d.deadline === 'string' ? d.deadline : 'Active'),
+              submissionsCount: typeof d.submissionsCount === 'number' ? d.submissionsCount : 0
+            } as Contest;
+          });
           setContests(fetched);
         }));
 
         const sRef = collection(db, 'contestSubmissions');
         unsubs.push(onSnapshot(sRef, (snap) => {
-          const fetched: ContestSubmission[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as ContestSubmission));
+          const fetched: ContestSubmission[] = snap.docs.map(docSnap => {
+            const d = docSnap.data();
+            return {
+              id: docSnap.id,
+              contestId: d.contestId || '',
+              userId: d.userId || d.authorId || '',
+              userName: d.userName || d.authorName || 'Contestant',
+              userAvatar: d.userAvatar || d.avatar || d.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+              videoUrl: d.videoUrl || d.mediaUrl || '',
+              caption: d.caption || d.text || '',
+              votes: Array.isArray(d.votes) ? d.votes : (d.votes && typeof d.votes === 'object' ? Object.keys(d.votes) : []),
+              createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toLocaleDateString() : (typeof d.createdAt === 'string' ? d.createdAt : 'Recently')
+            } as ContestSubmission;
+          });
           setSubmissions(fetched);
         }));
       }

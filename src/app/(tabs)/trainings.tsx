@@ -20,7 +20,22 @@ export default function TrainingsScreen() {
       if (db) {
         const tRef = collection(db, 'trainingProgrammes');
         unsubscribe = onSnapshot(tRef, (snap) => {
-          const fetched: TrainingProgramme[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as TrainingProgramme));
+          const fetched: TrainingProgramme[] = snap.docs.map(docSnap => {
+            const d = docSnap.data();
+            return {
+              id: docSnap.id,
+              title: d.title || d.name || 'Masterclass',
+              type: d.type || 'workshop',
+              description: d.description || d.details || '',
+              instructor: d.instructor || d.speaker || d.host || 'Industry Lead',
+              date: d.date?.toDate ? d.date.toDate().toLocaleDateString() : (typeof d.date === 'string' ? d.date : 'TBA'),
+              location: d.location || 'Lagos, Nigeria',
+              contactEmail: d.contactEmail || d.email || '',
+              contactPhone: d.contactPhone || d.phone || '',
+              bannerUrl: d.bannerUrl || d.imageUrl || d.image || undefined,
+              subscriberCount: typeof d.subscriberCount === 'number' ? d.subscriberCount : 0
+            } as TrainingProgramme;
+          });
           setTrainings(fetched);
         });
       }

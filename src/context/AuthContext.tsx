@@ -45,7 +45,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const userRef = doc(db, 'users', fbUser.uid);
                 const userSnap = await getDoc(userRef);
                 if (userSnap.exists()) {
-                  const profileData = userSnap.data() as Profile;
+                  const uData = userSnap.data();
+                  const profileData: Profile = {
+                    uid: fbUser.uid,
+                    name: uData.name || uData.displayName || fbUser.displayName || fbUser.email?.split('@')[0] || 'Film Creative',
+                    email: uData.email || fbUser.email || '',
+                    role: uData.role || 'Actor/Actress',
+                    location: uData.location || 'Lagos, Nigeria',
+                    timezone: uData.timezone || 'GMT+1 (WAT)',
+                    skills: Array.isArray(uData.skills) ? uData.skills : ['Acting'],
+                    avatar: uData.avatar || uData.photoURL || fbUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400',
+                    verified: !!uData.verified,
+                    premium: !!uData.premium,
+                    bio: uData.bio || '',
+                    resumeUrl: uData.resumeUrl || '',
+                    headshots: Array.isArray(uData.headshots) ? uData.headshots : [],
+                    reelsUrl: uData.reelsUrl || '',
+                    isAdmin: !!uData.isAdmin || (fbUser.email || '').includes('admin'),
+                    followersCount: typeof uData.followersCount === 'number' ? uData.followersCount : 0,
+                    followingCount: typeof uData.followingCount === 'number' ? uData.followingCount : 0,
+                  };
                   setUser(profileData);
                   registerForPushNotificationsAsync(fbUser.uid);
                 } else {

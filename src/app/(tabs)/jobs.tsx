@@ -26,10 +26,22 @@ export default function JobsScreen() {
       if (db) {
         const jobsRef = collection(db, 'jobs');
         unsubscribe = onSnapshot(jobsRef, (snapshot) => {
-          const fetched: Job[] = snapshot.docs.map(d => ({
-            id: d.id,
-            ...d.data()
-          } as Job));
+          const fetched: Job[] = snapshot.docs.map(docSnap => {
+            const d = docSnap.data();
+            return {
+              id: docSnap.id,
+              title: d.title || d.jobTitle || d.roleName || 'Casting Call',
+              company: d.company || d.productionCompany || d.studio || 'Production Studio',
+              roleType: d.roleType || d.type || 'Actor/Actress',
+              requiredSkills: Array.isArray(d.requiredSkills) ? d.requiredSkills : (Array.isArray(d.skills) ? d.skills : []),
+              budget: typeof d.budget === 'number' ? d.budget : (typeof d.pay === 'number' ? d.pay : 0),
+              currency: d.currency || '₦',
+              location: d.location || 'Lagos, Nigeria',
+              description: d.description || d.details || '',
+              deadline: d.deadline?.toDate ? d.deadline.toDate().toLocaleDateString() : (typeof d.deadline === 'string' ? d.deadline : 'Open'),
+              createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toLocaleDateString() : (typeof d.createdAt === 'string' ? d.createdAt : 'Recently')
+            } as Job;
+          });
           setJobs(fetched);
         }, (err) => {
           console.warn('Jobs snapshot listener warning:', err);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Image, TextInput, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { collection, onSnapshot, query, where, addDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, addDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { Search, MessageSquare, ShieldCheck, Clock, Video } from 'lucide-react-native';
 import { Header } from '../../components/Header';
 import { ChatWindowModal } from '../../components/ChatWindowModal';
@@ -24,11 +24,47 @@ export default function MessagesScreen() {
     try {
       const chatsRef = collection(db, 'chats');
       const q = query(chatsRef, where('participantIds', 'array-contains', user.uid));
-      unsubscribe = onSnapshot(q, (snapshot) => {
-        const fetched: ChatThread[] = snapshot.docs.map(d => ({
-          id: d.id,
-          ...d.data()
-        } as ChatThread));
+      unsubscribe = onSnapshot(q, async (snapshot) => {
+        const fetchedPromises = snapshot.docs.map(async (docSnap) => {
+          const d = docSnap.data();
+          const participantIds: string[] = Array.isArray(d.participantIds) ? d.participantIds : [];
+          const otherUserId = participantIds.find(id => id !== user.uid) || d.otherUserId || '';
+          let otherUserObj = d.otherUser || {};
+
+          if (otherUserId && (!otherUserObj.name || !otherUserObj.avatar)) {
+            try {
+              const uSnap = await getDoc(doc(db, 'users', otherUserId));
+              if (uSnap.exists()) {
+                const uData = uSnap.data();
+                otherUserObj = {
+                  uid: otherUserId,
+                  name: uData.name || uData.displayName || 'User',
+                  role: uData.role || 'Member',
+                  avatar: uData.avatar || uData.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+                  verified: !!uData.verified,
+                  timezone: uData.timezone || ''
+                };
+              }
+            } catch(e){}
+          }
+
+          return {
+            id: docSnap.id,
+            participantIds,
+            otherUser: {
+              uid: otherUserObj.uid || otherUserId,
+              name: otherUserObj.name || 'User',
+              role: otherUserObj.role || 'Member',
+              avatar: otherUserObj.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+              verified: !!otherUserObj.verified,
+              timezone: otherUserObj.timezone || ''
+            },
+            lastMessage: d.lastMessage || d.text || '',
+            updatedAt: d.updatedAt?.toDate ? d.updatedAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (typeof d.updatedAt === 'string' ? d.updatedAt : 'Recently')
+          } as ChatThread;
+        });
+
+        const fetched = await Promise.all(fetchedPromises);
         setThreads(fetched);
       });
     } catch (e) {

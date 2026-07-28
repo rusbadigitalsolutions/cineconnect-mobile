@@ -24,14 +24,75 @@ export default function GistFeedScreen() {
     try {
       if (db) {
         const postsRef = collection(db, 'posts');
-        // Limit initial load to 20 posts for instant response
-        const q = query(postsRef, orderBy('createdAt', 'desc'), limit(20));
-        unsubscribe = onSnapshot(q, (snapshot) => {
-          const fetched: Post[] = snapshot.docs.map(docSnap => ({
-            id: docSnap.id,
-            ...docSnap.data()
-          } as Post));
-          setPosts(fetched);
+        // Fetch posts without rigid orderBy to avoid missing index errors on custom schemas
+        const q = query(postsRef, limit(50));
+        unsubscribe = onSnapshot(q, async (snapshot) => {
+          const userCache: Record<string, { name: string; avatar: string; role: any }> = {};
+
+          const rawPosts: Post[] = snapshot.docs.map(docSnap => {
+            const data = docSnap.data();
+            return {
+              id: docSnap.id,
+              authorId: data.authorId || data.userId || data.creatorId || '',
+              authorName: data.authorName || data.userName || data.displayName || data.name || '',
+              authorRole: data.authorRole || data.userRole || data.role || 'Actor/Actress',
+              authorAvatar: data.authorAvatar || data.userAvatar || data.avatar || data.photoURL || '',
+              text: data.text || data.content || data.body || '',
+              mediaUrl: data.mediaUrl || data.imageUrl || data.image || data.photo || undefined,
+              mediaType: data.mediaType || (data.mediaUrl || data.imageUrl || data.image ? 'image' : undefined),
+              category: data.category || 'All Gists',
+              likes: Array.isArray(data.likes) ? data.likes : (data.likes && typeof data.likes === 'object' ? Object.keys(data.likes) : []),
+              reactions: data.reactions && typeof data.reactions === 'object' ? data.reactions : {},
+              commentsCount: typeof data.commentsCount === 'number' ? data.commentsCount : (Array.isArray(data.comments) ? data.comments.length : 0),
+              comments: Array.isArray(data.comments) ? data.comments.map((c: any, i: number) => ({
+                id: c.id || `c-${i}`,
+                authorId: c.authorId || c.userId || '',
+                authorName: c.authorName || c.userName || c.displayName || c.name || 'User',
+                authorAvatar: c.authorAvatar || c.userAvatar || c.avatar || c.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+                text: c.text || c.content || c.comment || '',
+                createdAt: c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString() : (typeof c.createdAt === 'string' ? c.createdAt : 'Just now')
+              })) : [],
+              repostCount: typeof data.repostCount === 'number' ? data.repostCount : 0,
+              originalPost: data.originalPost ? {
+                id: data.originalPost.id || '',
+                authorName: data.originalPost.authorName || data.originalPost.userName || 'Original Creator',
+                authorRole: data.originalPost.authorRole || data.originalPost.role || 'Creative',
+                authorAvatar: data.originalPost.authorAvatar || data.originalPost.avatar || '',
+                text: data.originalPost.text || data.originalPost.content || '',
+                mediaUrl: data.originalPost.mediaUrl || data.originalPost.imageUrl
+              } : undefined,
+              moderationStatus: data.moderationStatus || 'approved',
+              createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (typeof data.createdAt === 'string' ? data.createdAt : 'Just now')
+            } as Post;
+          });
+
+          // Fetch user details from /users/{authorId} if missing on the post document
+          const uidsToFetch = Array.from(new Set(rawPosts.map(p => p.authorId).filter(Boolean)));
+          await Promise.all(uidsToFetch.map(async (uid) => {
+            try {
+              const uSnap = await getDoc(doc(db, 'users', uid));
+              if (uSnap.exists()) {
+                const uData = uSnap.data();
+                userCache[uid] = {
+                  name: uData.name || uData.displayName || 'Film Creative',
+                  avatar: uData.avatar || uData.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+                  role: uData.role || 'Actor/Actress'
+                };
+              }
+            } catch(e){}
+          }));
+
+          const enriched = rawPosts.map(p => {
+            const cachedUser = userCache[p.authorId];
+            return {
+              ...p,
+              authorName: p.authorName || cachedUser?.name || 'Film Creative',
+              authorAvatar: p.authorAvatar || cachedUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+              authorRole: p.authorRole || cachedUser?.role || 'Actor/Actress'
+            };
+          });
+
+          setPosts(enriched);
         }, (err) => {
           console.warn('Firestore posts snapshot listener warning:', err);
         });

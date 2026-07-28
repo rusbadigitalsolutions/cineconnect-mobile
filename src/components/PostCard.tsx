@@ -32,8 +32,10 @@ const PostCardComponent: React.FC<PostCardProps> = ({
   const [repostQuote, setRepostQuote] = useState('');
   const [flagged, setFlagged] = useState(post.moderationStatus === 'flagged');
 
-  const isLiked = user ? post.likes.includes(user.uid) : false;
-  const userReaction = user ? post.reactions[user.uid] : null;
+  const likesList = Array.isArray(post.likes) ? post.likes : [];
+  const reactionsMap = (post.reactions && typeof post.reactions === 'object') ? post.reactions : {};
+  const isLiked = user ? likesList.includes(user.uid) : false;
+  const userReaction = user ? reactionsMap[user.uid] : null;
 
   const handleLike = () => {
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch(e){}
@@ -163,7 +165,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
         <TouchableOpacity onPress={handleLike} className="flex-row items-center">
           <Heart size={18} color={isLiked ? '#EF4444' : '#94A3B8'} fill={isLiked ? '#EF4444' : 'none'} />
           <Text className={`ml-1.5 text-xs font-semibold ${isLiked ? 'text-rose-500' : 'text-slate-400'}`}>
-            {post.likes.length}
+            {likesList.length}
           </Text>
         </TouchableOpacity>
 

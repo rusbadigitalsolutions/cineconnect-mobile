@@ -23,7 +23,22 @@ export default function MarketplaceScreen() {
       if (db) {
         const mRef = collection(db, 'marketplaceItems');
         unsubscribe = onSnapshot(mRef, (snap) => {
-          const fetched: MarketplaceItem[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as MarketplaceItem));
+          const fetched: MarketplaceItem[] = snap.docs.map(docSnap => {
+            const d = docSnap.data();
+            return {
+              id: docSnap.id,
+              title: d.title || d.name || 'Rental Item',
+              category: d.category || 'Equipment',
+              price: typeof d.price === 'number' ? d.price : (typeof d.rate === 'number' ? d.rate : 0),
+              period: d.period || 'day',
+              location: d.location || 'Lagos, Nigeria',
+              imageUrl: d.imageUrl || d.image || d.photo || 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&q=80&w=600',
+              status: d.status || 'available',
+              vendorId: d.vendorId || d.sellerId || '',
+              vendorName: d.vendorName || d.sellerName || 'Vendor',
+              createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toLocaleDateString() : (typeof d.createdAt === 'string' ? d.createdAt : 'Recently')
+            } as MarketplaceItem;
+          });
           setItems(fetched);
         });
       }
