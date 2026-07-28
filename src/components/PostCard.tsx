@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { Heart, MessageSquare, Repeat, Flag, Send } from 'lucide-react-native';
 import { Post, UserRole } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { MediaRenderer } from './MediaRenderer';
 
 interface PostCardProps {
   post: Post;
@@ -16,6 +17,7 @@ interface PostCardProps {
 }
 
 const EMOJIS = ['🔥', '👏', '🎬', '❤️'];
+const URL_REGEX = /(https?:\/\/[^\s]+)/gi;
 
 const PostCardComponent: React.FC<PostCardProps> = ({
   post,
@@ -65,97 +67,122 @@ const PostCardComponent: React.FC<PostCardProps> = ({
     setShowRepostInput(false);
   };
 
-  const getRoleBadgeStyle = (role: UserRole) => {
-    switch (role) {
-      case 'Casting Director':
-        return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
-      case 'Producer':
-        return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-      case 'Crew member':
-        return 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30';
-      default:
-        return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
-    }
-  };
+  const reactionCounts: Record<string, number> = {};
+  if (post.reactions && typeof post.reactions === 'object') {
+    Object.entries(post.reactions).forEach(([key, val]) => {
+      if (typeof val === 'string' && EMOJIS.includes(val)) {
+        reactionCounts[val] = (reactionCounts[val] || 0) + 1;
+      } else if (typeof val === 'number' && EMOJIS.includes(key)) {
+        reactionCounts[key] = (reactionCounts[key] || 0) + val;
+      } else if (Array.isArray(val) && EMOJIS.includes(key)) {
+        reactionCounts[key] = (reactionCounts[key] || 0) + val.length;
+      }
+    });
+  }
+
+  // Hide raw media URLs from displayed text body
+  const rawText = post.text || '';
+  const cleanedText = rawText.replace(URL_REGEX, '').trim();
+
+  // For reposted content, clean raw text as well
+  const origRawText = post.originalPost?.text || '';
+  const origCleanedText = origRawText.replace(URL_REGEX, '').trim();
 
   return (
-    <View className="bg-slate-900 border border-slate-800 rounded-2xl p-4 mb-4 shadow-lg">
-      {/* Author Header */}
+    <View className="bg-slate-900 border border-slate-800 rounded-2xl p-4 mb-4 shadow-md">
+      {/* Header Info */}
       <View className="flex-row items-center justify-between mb-3">
-        <View className="flex-row items-center">
+        <View className="flex-row items-center flex-1">
           <Image
             source={{ uri: post.authorAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300' }}
-            className="w-11 h-11 rounded-full border border-slate-700 mr-3"
+            className="w-10 h-10 rounded-full mr-3 border border-amber-500/30"
             contentFit="cover"
-            transition={150}
+            transition={200}
             recyclingKey={post.authorId}
           />
-          <View>
-            <View className="flex-row items-center">
-              <Text className="text-white font-bold text-base mr-2">{post.authorName}</Text>
-              <View className={`px-2 py-0.5 rounded-full border ${getRoleBadgeStyle(post.authorRole)}`}>
-                <Text className="text-[10px] font-semibold">{post.authorRole}</Text>
+          <View className="flex-1">
+            <View className="flex-row items-center flex-wrap">
+              <Text className="text-white font-bold text-sm mr-1.5">{post.authorName}</Text>
+              <View className="bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-full">
+                <Text className="text-amber-400 font-semibold text-[10px]">{post.authorRole}</Text>
               </View>
             </View>
-            <Text className="text-slate-400 text-xs mt-0.5">{post.createdAt} • {post.category}</Text>
+            <Text className="text-slate-400 text-xs mt-0.5">{post.createdAt}</Text>
           </View>
         </View>
 
-        {/* Flag Action */}
-        <TouchableOpacity 
-          onPress={handleFlagClick} 
-          className="p-2 bg-slate-800/80 rounded-lg"
-        >
-          <Flag size={14} color={flagged ? "#EF4444" : "#64748B"} />
+        {/* Flag Post */}
+        <TouchableOpacity onPress={handleFlagClick} className="p-1.5 rounded-lg bg-slate-950/40 border border-slate-800">
+          <Flag size={14} color={flagged ? '#EF4444' : '#64748B'} fill={flagged ? '#EF4444' : 'none'} />
         </TouchableOpacity>
       </View>
 
-      {/* Post Text Content */}
-      <Text className="text-slate-100 text-sm leading-6 mb-3">{post.text}</Text>
+      {/* Post Text Content (Link text hidden when media is present) */}
+      {cleanedText.length > 0 ? (
+        <Text className="text-slate-100 text-sm leading-6 mb-3">{cleanedText}</Text>
+      ) : null}
 
       {/* Quoted / Reposted Original Content */}
       {post.originalPost && (
         <View className="bg-slate-950 border border-slate-800 rounded-xl p-3 mb-3">
-          <View className="flex-row items-center mb-1.5">
+          <View className="flex-row items-center mb-2">
+            <Repeat size={12} color="#F59E0B" style={{ marginRight: 6 }} />
+            <Text className="text-amber-400 font-bold text-[11px] uppercase tracking-wider">Reposted Gist</Text>
+          </View>
+
+          <View className="flex-row items-center mb-2">
             <Image
               source={{ uri: post.originalPost.authorAvatar || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=300' }}
-              className="w-6 h-6 rounded-full mr-2"
+              className="w-7 h-7 rounded-full mr-2 border border-slate-700"
               contentFit="cover"
               transition={150}
             />
-            <Text className="text-amber-400 font-bold text-xs">{post.originalPost.authorName}</Text>
-            <Text className="text-slate-500 text-[10px] ml-2">{post.originalPost.authorRole}</Text>
+            <View className="flex-1 flex-row items-center flex-wrap">
+              <Text className="text-white font-bold text-xs mr-1.5">{post.originalPost.authorName}</Text>
+              {post.originalPost.authorRole ? (
+                <View className="bg-slate-800 px-1.5 py-0.5 rounded-full border border-slate-700">
+                  <Text className="text-slate-300 text-[9px] font-medium">{post.originalPost.authorRole}</Text>
+                </View>
+              ) : null}
+            </View>
           </View>
-          <Text className="text-slate-300 text-xs">{post.originalPost.text}</Text>
+
+          {origCleanedText.length > 0 ? (
+            <Text className="text-slate-200 text-xs mb-2 leading-5">{origCleanedText}</Text>
+          ) : null}
+
+          {/* Media for quoted post */}
+          <MediaRenderer mediaUrl={post.originalPost.mediaUrl} text={post.originalPost.text} />
         </View>
       )}
 
-      {/* Rich Media Display */}
-      {post.mediaUrl && (
-        <View className="rounded-xl overflow-hidden mb-3 border border-slate-800 bg-slate-950">
-          <Image
-            source={{ uri: post.mediaUrl }}
-            className="w-full h-52"
-            contentFit="cover"
-            transition={200}
-            recyclingKey={post.id}
-          />
-        </View>
-      )}
+      {/* Universal Media & Video Renderer (YouTube, Vimeo, MP4, Web Links, Images) */}
+      <MediaRenderer mediaUrl={post.mediaUrl} text={post.text} />
 
       {/* Reactions Bar */}
       <View className="flex-row items-center bg-slate-950/60 rounded-xl p-2 mb-3 border border-slate-800/50 justify-between">
         <Text className="text-slate-400 text-xs font-semibold mr-2">Reactions:</Text>
-        <View className="flex-row space-x-2">
-          {EMOJIS.map(emoji => (
-            <TouchableOpacity
-              key={emoji}
-              onPress={() => handleReaction(emoji)}
-              className={`px-2.5 py-1 rounded-lg ${userReaction === emoji ? 'bg-amber-500/20 border border-amber-500/50' : 'bg-slate-800'}`}
-            >
-              <Text className="text-sm">{emoji}</Text>
-            </TouchableOpacity>
-          ))}
+        <View className="flex-row space-x-1.5">
+          {EMOJIS.map(emoji => {
+            const count = reactionCounts[emoji] || 0;
+            const isSelected = userReaction === emoji;
+            return (
+              <TouchableOpacity
+                key={emoji}
+                onPress={() => handleReaction(emoji)}
+                className={`px-2 py-1 rounded-lg flex-row items-center ${
+                  isSelected ? 'bg-amber-500/20 border border-amber-500/50' : 'bg-slate-800 border border-transparent'
+                }`}
+              >
+                <Text className="text-sm">{emoji}</Text>
+                {count > 0 && (
+                  <Text className={`text-[11px] font-extrabold ml-1 ${isSelected ? 'text-amber-400' : 'text-slate-300'}`}>
+                    {count}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
 
@@ -205,13 +232,23 @@ const PostCardComponent: React.FC<PostCardProps> = ({
       {/* Comments Section */}
       {showComments && (
         <View className="mt-3 pt-3 border-t border-slate-800">
-          <Text className="text-slate-300 font-bold text-xs mb-2">Comments</Text>
+          <Text className="text-slate-300 font-bold text-xs mb-2">Comments ({post.comments?.length || 0})</Text>
           
           {post.comments && post.comments.length > 0 ? (
             post.comments.map(c => (
-              <View key={c.id} className="bg-slate-950 rounded-xl p-2.5 mb-2 border border-slate-800/80">
-                <Text className="text-amber-400 font-bold text-xs">{c.authorName}</Text>
-                <Text className="text-slate-200 text-xs mt-0.5">{c.text}</Text>
+              <View key={c.id} className="bg-slate-950 rounded-xl p-2.5 mb-2 border border-slate-800/80 flex-row items-start">
+                <Image
+                  source={{ uri: c.authorAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200' }}
+                  className="w-7 h-7 rounded-full mr-2.5 mt-0.5"
+                  contentFit="cover"
+                />
+                <View className="flex-1">
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-amber-400 font-bold text-xs">{c.authorName || 'Film Creative'}</Text>
+                    {c.createdAt ? <Text className="text-slate-500 text-[10px]">{c.createdAt}</Text> : null}
+                  </View>
+                  <Text className="text-slate-200 text-xs mt-0.5 leading-4">{c.text}</Text>
+                </View>
               </View>
             ))
           ) : (
@@ -243,9 +280,10 @@ export const PostCard = memo(PostCardComponent, (prevProps, nextProps) => {
     prevProps.post.id === nextProps.post.id &&
     prevProps.post.likes.length === nextProps.post.likes.length &&
     prevProps.post.commentsCount === nextProps.post.commentsCount &&
+    (prevProps.post.comments?.length || 0) === (nextProps.post.comments?.length || 0) &&
     prevProps.post.repostCount === nextProps.post.repostCount &&
     prevProps.post.moderationStatus === nextProps.post.moderationStatus &&
     prevProps.post.text === nextProps.post.text &&
-    prevProps.post.reactions === nextProps.post.reactions
+    JSON.stringify(prevProps.post.reactions) === JSON.stringify(nextProps.post.reactions)
   );
 });

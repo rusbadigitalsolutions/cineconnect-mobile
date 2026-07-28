@@ -23,10 +23,12 @@ export default function MarketplaceScreen() {
       if (db) {
         const mRef = collection(db, 'marketplaceItems');
         unsubscribe = onSnapshot(mRef, (snap) => {
-          const fetched: MarketplaceItem[] = snap.docs.map(docSnap => {
+          const fetched = snap.docs.map(docSnap => {
             const d = docSnap.data();
+            const rawTime = d.createdAt?.toDate ? d.createdAt.toDate().getTime() : (typeof d.createdAt === 'number' ? d.createdAt : (d.createdAt ? (Date.parse(d.createdAt) || 0) : 0));
             return {
               id: docSnap.id,
+              rawTime,
               title: d.title || d.name || 'Rental Item',
               category: d.category || 'Equipment',
               price: typeof d.price === 'number' ? d.price : (typeof d.rate === 'number' ? d.rate : 0),
@@ -39,6 +41,7 @@ export default function MarketplaceScreen() {
               createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toLocaleDateString() : (typeof d.createdAt === 'string' ? d.createdAt : 'Recently')
             } as MarketplaceItem;
           });
+          fetched.sort((a, b) => b.rawTime - a.rawTime);
           setItems(fetched);
         });
       }

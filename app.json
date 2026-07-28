@@ -51,7 +51,10 @@
           "color": "#F59E0B"
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-video",
+      "expo-audio",
+      "expo-asset"
     ],
     "extra": {
       "router": {},

@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, RefreshControl } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { Image } from 'expo-image';
-import { collection, onSnapshot, query, orderBy, limit, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, limit, addDoc, updateDoc, doc, getDoc, getDocs } from 'firebase/firestore';
 import { Plus, Flame, Sparkles, Megaphone } from 'lucide-react-native';
 import { Header } from '../../components/Header';
 import { PostCard } from '../../components/PostCard';
@@ -29,10 +29,146 @@ export default function GistFeedScreen() {
         unsubscribe = onSnapshot(q, async (snapshot) => {
           const userCache: Record<string, { name: string; avatar: string; role: any }> = {};
 
-          const rawPosts: Post[] = snapshot.docs.map(docSnap => {
+          const rawPostsPromises = snapshot.docs.map(async (docSnap) => {
             const data = docSnap.data();
+            const rawTime = data.createdAt?.toDate ? data.createdAt.toDate().getTime() : (typeof data.createdAt === 'number' ? data.createdAt : (data.createdAt ? (Date.parse(data.createdAt) || 0) : 0));
+
+            // 1. Extract inline comments from all potential array/map fields
+            let inlineComments: any[] = [];
+            [data.comments, data.replies, data.postComments, data.responses, data.commentList].forEach(field => {
+              if (Array.isArray(field)) {
+                inlineComments.push(...field);
+              } else if (field && typeof field === 'object') {
+                inlineComments.push(...Object.values(field));
+              }
+            });
+
+            // 2. Fetch subcollection comments (/posts/{id}/comments and /posts/{id}/replies)
+            let fetchedSubComments: any[] = [];
+            try {
+              const [cSnap, rSnap] = await Promise.all([
+                getDocs(collection(db, 'posts', docSnap.id, 'comments')).catch(() => null),
+                getDocs(collection(db, 'posts', docSnap.id, 'replies')).catch(() => null)
+              ]);
+              if (cSnap && !cSnap.empty) {
+                cSnap.docs.forEach(cDoc => fetchedSubComments.push({ id: cDoc.id, ...cDoc.data() }));
+              }
+              if (rSnap && !rSnap.empty) {
+                rSnap.docs.forEach(rDoc => fetchedSubComments.push({ id: rDoc.id, ...rDoc.data() }));
+              }
+            } catch(e){}
+
+            // Merge unique comments
+            const commentMap = new Map<string, any>();
+            inlineComments.forEach((c, idx) => {
+              if (c && typeof c === 'object') {
+                const key = c.id || c.commentId || `inc-${idx}-${String(c.text || c.comment || '').substring(0, 10)}`;
+                commentMap.set(key, c);
+              }
+            });
+            fetchedSubComments.forEach(c => {
+              if (c && typeof c === 'object') {
+                commentMap.set(c.id, c);
+              }
+            });
+
+            const mergedComments = Array.from(commentMap.values());
+
+            // Collect author IDs for comments to enrich missing user profiles
+            const commentAuthorIds = Array.from(new Set(mergedComments.map(c => c.authorId || c.userId || c.creatorId).filter(Boolean)));
+            await Promise.all(commentAuthorIds.map(async (uid) => {
+              if (!userCache[uid]) {
+                try {
+                  const uSnap = await getDoc(doc(db, 'users', uid));
+                  if (uSnap.exists()) {
+                    const uData = uSnap.data();
+                    userCache[uid] = {
+                      name: uData.name || uData.displayName || uData.username || 'Film Creative',
+                      avatar: uData.avatar || uData.photoURL || uData.profilePicture || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+                      role: uData.role || 'Actor/Actress'
+                    };
+                  }
+                } catch(e){}
+              }
+            }));
+
+            const normalizedComments = mergedComments.map((c: any, i: number) => {
+              const cUid = c.authorId || c.userId || c.creatorId || '';
+              const cUser = cUid ? userCache[cUid] : null;
+              return {
+                id: c.id || `c-${i}`,
+                authorId: cUid,
+                authorName: c.authorName || c.userName || c.displayName || c.name || cUser?.name || 'Film Creative',
+                authorAvatar: c.authorAvatar || c.userAvatar || c.avatar || c.photoURL || cUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+                text: c.text || c.content || c.comment || c.body || c.message || '',
+                createdAt: c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString() : (typeof c.createdAt === 'string' ? c.createdAt : 'Just now')
+              };
+            });
+
+            // Extract & Normalize Reactions from all possible field names
+            let reactionsObj: Record<string, string> = {};
+            const rawReactions = data.reactions || data.emojis || data.userReactions || data.reactionMap;
+
+            if (Array.isArray(rawReactions)) {
+              rawReactions.forEach((r: any) => {
+                if (typeof r === 'string') {
+                  reactionsObj[r] = '🔥';
+                } else if (r && typeof r === 'object') {
+                  const rUid = r.userId || r.uid || r.authorId;
+                  const rEmoji = r.emoji || r.type || r.reaction || '🔥';
+                  if (rUid) reactionsObj[rUid] = rEmoji;
+                }
+              });
+            } else if (rawReactions && typeof rawReactions === 'object') {
+              Object.entries(rawReactions).forEach(([key, val]) => {
+                if (typeof val === 'string') {
+                  reactionsObj[key] = val;
+                } else if (Array.isArray(val)) {
+                  val.forEach((uid: any) => {
+                    if (typeof uid === 'string') reactionsObj[uid] = key;
+                  });
+                } else if (typeof val === 'number') {
+                  reactionsObj[key] = key;
+                }
+              });
+            }
+
+            // Map likes array to reactions if reactions is empty
+            const likesArr = Array.isArray(data.likes) ? data.likes : (data.likes && typeof data.likes === 'object' ? Object.keys(data.likes) : []);
+            if (Object.keys(reactionsObj).length === 0 && likesArr.length > 0) {
+              likesArr.forEach((uid: string) => {
+                reactionsObj[uid] = '❤️';
+              });
+            }
+
+            // Extract or fetch original post for reposts
+            let origPostObj: any = data.originalPost || data.quotedPost || data.parentPost || data.repost;
+            const origId = data.originalPostId || data.repostedFromId || data.repostId || data.quotedPostId || origPostObj?.id;
+
+            if (!origPostObj && origId) {
+              try {
+                const origSnap = await getDoc(doc(db, 'posts', origId));
+                if (origSnap.exists()) {
+                  origPostObj = { id: origSnap.id, ...origSnap.data() };
+                }
+              } catch(e){}
+            }
+
+            let normalizedOriginalPost = undefined;
+            if (origPostObj) {
+              normalizedOriginalPost = {
+                id: origPostObj.id || origId || '',
+                authorName: origPostObj.authorName || origPostObj.userName || origPostObj.displayName || origPostObj.name || 'Original Creator',
+                authorRole: origPostObj.authorRole || origPostObj.userRole || origPostObj.role || 'Creative',
+                authorAvatar: origPostObj.authorAvatar || origPostObj.userAvatar || origPostObj.avatar || origPostObj.photoURL || 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=300',
+                text: origPostObj.text || origPostObj.content || origPostObj.body || '',
+                mediaUrl: origPostObj.mediaUrl || origPostObj.imageUrl || origPostObj.image || origPostObj.photo
+              };
+            }
+
             return {
               id: docSnap.id,
+              rawTime,
               authorId: data.authorId || data.userId || data.creatorId || '',
               authorName: data.authorName || data.userName || data.displayName || data.name || '',
               authorRole: data.authorRole || data.userRole || data.role || 'Actor/Actress',
@@ -42,29 +178,20 @@ export default function GistFeedScreen() {
               mediaType: data.mediaType || (data.mediaUrl || data.imageUrl || data.image ? 'image' : undefined),
               category: data.category || 'All Gists',
               likes: Array.isArray(data.likes) ? data.likes : (data.likes && typeof data.likes === 'object' ? Object.keys(data.likes) : []),
-              reactions: data.reactions && typeof data.reactions === 'object' ? data.reactions : {},
-              commentsCount: typeof data.commentsCount === 'number' ? data.commentsCount : (Array.isArray(data.comments) ? data.comments.length : 0),
-              comments: Array.isArray(data.comments) ? data.comments.map((c: any, i: number) => ({
-                id: c.id || `c-${i}`,
-                authorId: c.authorId || c.userId || '',
-                authorName: c.authorName || c.userName || c.displayName || c.name || 'User',
-                authorAvatar: c.authorAvatar || c.userAvatar || c.avatar || c.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
-                text: c.text || c.content || c.comment || '',
-                createdAt: c.createdAt?.toDate ? c.createdAt.toDate().toLocaleDateString() : (typeof c.createdAt === 'string' ? c.createdAt : 'Just now')
-              })) : [],
+              reactions: reactionsObj,
+              commentsCount: typeof data.commentsCount === 'number' ? Math.max(data.commentsCount, normalizedComments.length) : normalizedComments.length,
+              comments: normalizedComments,
               repostCount: typeof data.repostCount === 'number' ? data.repostCount : 0,
-              originalPost: data.originalPost ? {
-                id: data.originalPost.id || '',
-                authorName: data.originalPost.authorName || data.originalPost.userName || 'Original Creator',
-                authorRole: data.originalPost.authorRole || data.originalPost.role || 'Creative',
-                authorAvatar: data.originalPost.authorAvatar || data.originalPost.avatar || '',
-                text: data.originalPost.text || data.originalPost.content || '',
-                mediaUrl: data.originalPost.mediaUrl || data.originalPost.imageUrl
-              } : undefined,
+              originalPost: normalizedOriginalPost,
               moderationStatus: data.moderationStatus || 'approved',
               createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (typeof data.createdAt === 'string' ? data.createdAt : 'Just now')
-            } as Post;
+            };
           });
+
+          const rawPosts = await Promise.all(rawPostsPromises);
+
+          // Sort latest first
+          rawPosts.sort((a, b) => b.rawTime - a.rawTime);
 
           // Fetch user details from /users/{authorId} if missing on the post document
           const uidsToFetch = Array.from(new Set(rawPosts.map(p => p.authorId).filter(Boolean)));
@@ -198,18 +325,19 @@ export default function GistFeedScreen() {
     }));
   }, []);
 
-  const handleAddComment = useCallback((postId: string, commentText: string) => {
+  const handleAddComment = useCallback(async (postId: string, commentText: string) => {
     if (!user) return;
+    const newCommentObj = {
+      id: `c-${Date.now()}`,
+      authorId: user.uid,
+      authorName: user.name,
+      authorAvatar: user.avatar,
+      text: commentText,
+      createdAt: 'Just now'
+    };
+
     setPosts(prev => prev.map(p => {
       if (p.id === postId) {
-        const newCommentObj = {
-          id: `c-${Date.now()}`,
-          authorId: user.uid,
-          authorName: user.name,
-          authorAvatar: user.avatar,
-          text: commentText,
-          createdAt: 'Just now'
-        };
         const updatedComments = [...(p.comments || []), newCommentObj];
         return {
           ...p,
@@ -219,6 +347,27 @@ export default function GistFeedScreen() {
       }
       return p;
     }));
+
+    try {
+      if (db) {
+        // Save in subcollection /posts/{postId}/comments
+        await addDoc(collection(db, 'posts', postId, 'comments'), newCommentObj);
+        // Update main document array
+        const postRef = doc(db, 'posts', postId);
+        const postSnap = await getDoc(postRef);
+        if (postSnap.exists()) {
+          const pData = postSnap.data();
+          const existingComments = Array.isArray(pData.comments) ? pData.comments : [];
+          const newArray = [...existingComments, newCommentObj];
+          await updateDoc(postRef, {
+            comments: newArray,
+            commentsCount: newArray.length
+          });
+        }
+      }
+    } catch(e){
+      console.warn('Comment save error:', e);
+    }
   }, [user]);
 
   const handleCreatePostSubmit = async (data: { text: string; category: 'Trending' | 'All Gists' | 'Casting Updates'; mediaUrl?: string }) => {

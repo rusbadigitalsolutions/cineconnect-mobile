@@ -48,8 +48,11 @@ export default function MessagesScreen() {
             } catch(e){}
           }
 
+          const rawTime = d.updatedAt?.toDate ? d.updatedAt.toDate().getTime() : (typeof d.updatedAt === 'number' ? d.updatedAt : (d.updatedAt ? (Date.parse(d.updatedAt) || 0) : 0));
+
           return {
             id: docSnap.id,
+            rawTime,
             participantIds,
             otherUser: {
               uid: otherUserObj.uid || otherUserId,
@@ -65,6 +68,7 @@ export default function MessagesScreen() {
         });
 
         const fetched = await Promise.all(fetchedPromises);
+        fetched.sort((a, b) => b.rawTime - a.rawTime);
         setThreads(fetched);
       });
     } catch (e) {

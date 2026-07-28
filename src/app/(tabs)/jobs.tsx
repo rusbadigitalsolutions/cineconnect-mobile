@@ -26,10 +26,12 @@ export default function JobsScreen() {
       if (db) {
         const jobsRef = collection(db, 'jobs');
         unsubscribe = onSnapshot(jobsRef, (snapshot) => {
-          const fetched: Job[] = snapshot.docs.map(docSnap => {
+          const fetched = snapshot.docs.map(docSnap => {
             const d = docSnap.data();
+            const rawTime = d.createdAt?.toDate ? d.createdAt.toDate().getTime() : (typeof d.createdAt === 'number' ? d.createdAt : (d.createdAt ? (Date.parse(d.createdAt) || 0) : 0));
             return {
               id: docSnap.id,
+              rawTime,
               title: d.title || d.jobTitle || d.roleName || 'Casting Call',
               company: d.company || d.productionCompany || d.studio || 'Production Studio',
               roleType: d.roleType || d.type || 'Actor/Actress',
@@ -42,6 +44,7 @@ export default function JobsScreen() {
               createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toLocaleDateString() : (typeof d.createdAt === 'string' ? d.createdAt : 'Recently')
             } as Job;
           });
+          fetched.sort((a, b) => b.rawTime - a.rawTime);
           setJobs(fetched);
         }, (err) => {
           console.warn('Jobs snapshot listener warning:', err);

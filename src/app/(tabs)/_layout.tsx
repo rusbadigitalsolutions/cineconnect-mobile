@@ -1,5 +1,7 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { Tabs } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { 
   Flame, 
   Briefcase, 
@@ -11,6 +13,9 @@ import {
 } from 'lucide-react-native';
 
 export default function TabsLayout() {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, Platform.OS === 'android' ? 12 : 8);
+
   return (
     <Tabs
       screenOptions={{
@@ -20,9 +25,9 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: '#0F172A', // Slate 900
           borderTopColor: '#1E293B',
-          height: 64,
-          paddingBottom: 8,
-          paddingTop: 8,
+          height: 56 + bottomPadding,
+          paddingBottom: bottomPadding,
+          paddingTop: 6,
         },
         tabBarLabelStyle: {
           fontSize: 10,

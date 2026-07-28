@@ -20,10 +20,12 @@ export default function TrainingsScreen() {
       if (db) {
         const tRef = collection(db, 'trainingProgrammes');
         unsubscribe = onSnapshot(tRef, (snap) => {
-          const fetched: TrainingProgramme[] = snap.docs.map(docSnap => {
+          const fetched = snap.docs.map(docSnap => {
             const d = docSnap.data();
+            const rawTime = d.createdAt?.toDate ? d.createdAt.toDate().getTime() : (typeof d.createdAt === 'number' ? d.createdAt : (d.createdAt ? (Date.parse(d.createdAt) || 0) : 0));
             return {
               id: docSnap.id,
+              rawTime,
               title: d.title || d.name || 'Masterclass',
               type: d.type || 'workshop',
               description: d.description || d.details || '',
@@ -36,6 +38,7 @@ export default function TrainingsScreen() {
               subscriberCount: typeof d.subscriberCount === 'number' ? d.subscriberCount : 0
             } as TrainingProgramme;
           });
+          fetched.sort((a, b) => b.rawTime - a.rawTime);
           setTrainings(fetched);
         });
       }

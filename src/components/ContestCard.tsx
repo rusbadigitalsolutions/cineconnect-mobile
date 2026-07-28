@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, Image, TouchableOpacity } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Trophy, ThumbsUp, Play, Flame, ShieldAlert } from 'lucide-react-native';
+import { Trophy, ThumbsUp, Flame, ShieldAlert } from 'lucide-react-native';
 import { Contest, ContestSubmission } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { MediaRenderer } from './MediaRenderer';
 
 interface ContestCardProps {
   contest: Contest;
@@ -112,19 +113,8 @@ export const ContestCard: React.FC<ContestCardProps> = React.memo(({
 
               <Text className="text-slate-300 text-xs mb-2 italic">"{sub.caption}"</Text>
 
-              {/* Video Preview Block */}
-              <View className="bg-slate-900 border border-slate-800 rounded-xl h-36 justify-center items-center relative overflow-hidden">
-                <Image
-                  source={{ uri: 'https://images.unsplash.com/photo-1518173946687-a4c8a383392e?auto=format&fit=crop&q=80&w=600' }}
-                  className="w-full h-full opacity-40 absolute"
-                />
-                <View className="w-12 h-12 rounded-full bg-amber-500/90 justify-center items-center shadow-lg">
-                  <Play size={20} color="#0F172A" className="ml-1" />
-                </View>
-                <Text className="text-white font-semibold text-[10px] mt-2 bg-slate-950/80 px-2 py-0.5 rounded-full">
-                  Tap to Play Monologue
-                </Text>
-              </View>
+              {/* Monologue Video Renderer (YouTube, MP4, Vimeo) */}
+              <MediaRenderer mediaUrl={sub.videoUrl} text={sub.caption} />
             </View>
           );
         })}

@@ -23,10 +23,12 @@ export default function ContestsScreen() {
       if (db) {
         const cRef = collection(db, 'contests');
         unsubs.push(onSnapshot(cRef, (snap) => {
-          const fetched: Contest[] = snap.docs.map(docSnap => {
+          const fetched = snap.docs.map(docSnap => {
             const d = docSnap.data();
+            const rawTime = d.createdAt?.toDate ? d.createdAt.toDate().getTime() : (typeof d.createdAt === 'number' ? d.createdAt : (d.createdAt ? (Date.parse(d.createdAt) || 0) : 0));
             return {
               id: docSnap.id,
+              rawTime,
               title: d.title || d.name || 'Monologue Challenge',
               description: d.description || d.details || '',
               hashtag: d.hashtag || '#CineConnect',
@@ -37,15 +39,18 @@ export default function ContestsScreen() {
               submissionsCount: typeof d.submissionsCount === 'number' ? d.submissionsCount : 0
             } as Contest;
           });
+          fetched.sort((a, b) => b.rawTime - a.rawTime);
           setContests(fetched);
         }));
 
         const sRef = collection(db, 'contestSubmissions');
         unsubs.push(onSnapshot(sRef, (snap) => {
-          const fetched: ContestSubmission[] = snap.docs.map(docSnap => {
+          const fetched = snap.docs.map(docSnap => {
             const d = docSnap.data();
+            const rawTime = d.createdAt?.toDate ? d.createdAt.toDate().getTime() : (typeof d.createdAt === 'number' ? d.createdAt : (d.createdAt ? (Date.parse(d.createdAt) || 0) : 0));
             return {
               id: docSnap.id,
+              rawTime,
               contestId: d.contestId || '',
               userId: d.userId || d.authorId || '',
               userName: d.userName || d.authorName || 'Contestant',
@@ -56,6 +61,7 @@ export default function ContestsScreen() {
               createdAt: d.createdAt?.toDate ? d.createdAt.toDate().toLocaleDateString() : (typeof d.createdAt === 'string' ? d.createdAt : 'Recently')
             } as ContestSubmission;
           });
+          fetched.sort((a, b) => b.rawTime - a.rawTime);
           setSubmissions(fetched);
         }));
       }
